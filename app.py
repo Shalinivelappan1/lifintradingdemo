@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Strategy Learning Lab", layout="wide")
 st.title("📚 Strategy Learning Lab")
-st.write("Upload any stock/index CSV (Date + Close)")
+st.write("Upload any stock/index CSV with Date and Close columns")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file:
 
-    # ================= DATA =================
+    # ================= LOAD DATA =================
     df = pd.read_csv(uploaded_file)
     df.columns = [c.strip() for c in df.columns]
 
@@ -22,6 +22,9 @@ if uploaded_file:
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
 
     df = df.dropna().sort_values(date_col).reset_index(drop=True)
+
+    if len(df) < 50:
+        st.warning("Dataset is short. Some strategies may not trigger.")
 
     # ================= SIDEBAR =================
     st.sidebar.header("Controls")
@@ -58,7 +61,7 @@ if uploaded_file:
 
     df["Return"] = df[price_col].pct_change()
 
-    # ================= STRATEGY FUNCTIONS =================
+    # ================= STRATEGIES =================
     def buy_hold():
         return pd.Series(1, index=df.index)
 
@@ -84,13 +87,8 @@ if uploaded_file:
         pullback = df[price_col] < df["MA_S"]
         return pd.Series(np.where(uptrend & pullback, 1, 0), index=df.index)
 
-    def blended_strategy():
-        pos1 = momentum()
-        pos2 = dual_ma()
-        pos3 = mean_reversion()
-        pos4 = rsi_strategy()
-        pos5 = breakout()
-        return (pos1 + pos2 + pos3 + pos4 + pos5) / 5
+    def blended():
+        return (momentum() + dual_ma() + mean_reversion() + rsi_strategy() + breakout()) / 5
 
     strategy_map = {
         "Buy & Hold": buy_hold(),
@@ -100,10 +98,10 @@ if uploaded_file:
         "RSI Reversal": rsi_strategy(),
         "Volatility Breakout": breakout(),
         "Trend Pullback": trend_pullback(),
-        "Blended Strategy": blended_strategy(),
+        "Blended Strategy": blended(),
     }
 
-    # ================= SELECTED STRATEGY =================
+    # ================= APPLY SELECTED STRATEGY =================
     position = strategy_map[strategy]
     df["Position"] = position
     df["Strat_Return"] = df["Return"] * df["Position"].shift(1)
@@ -112,18 +110,18 @@ if uploaded_file:
     # ================= EXPLANATION =================
     st.subheader("📖 Strategy Explanation")
 
-    explanation_text = {
-        "Buy & Hold": "Always invested. Shows compounding and drawdowns.",
-        "Momentum (Single MA)": "Buy when price above MA. Fast but noisy.",
+    explanation = {
+        "Buy & Hold": "Always invested. Shows long-term compounding.",
+        "Momentum (Single MA)": "Buy when price above moving average.",
         "Dual MA Crossover": "Buy when short MA crosses long MA.",
-        "Mean Reversion": "Buy deep dips. Fails in strong trends.",
-        "RSI Reversal": "Buy oversold RSI. Many signals.",
+        "Mean Reversion": "Buy deep dips expecting bounce.",
+        "RSI Reversal": "Buy when RSI oversold.",
         "Volatility Breakout": "Buy new highs.",
         "Trend Pullback": "Buy pullbacks in uptrend.",
-        "Blended Strategy": "Equal-weight mix of strategies across full period."
+        "Blended Strategy": "Mix of multiple strategies across time."
     }
 
-    st.info(explanation_text[strategy])
+    st.info(explanation[strategy])
 
     # ================= CHART =================
     entries = df[(df["Position"] == 1) & (df["Position"].shift(1) == 0)]
@@ -162,38 +160,51 @@ if uploaded_file:
     st.subheader("🎓 What to Observe")
 
     learnings = {
-        "Buy & Hold": "Observe long-term growth and drawdowns.",
-        "Momentum (Single MA)": "Notice whipsaws in sideways markets.",
+        "Buy & Hold": "Observe compounding and drawdowns.",
+        "Momentum (Single MA)": "Watch whipsaws in sideways markets.",
         "Dual MA Crossover": "Notice delayed entries.",
-        "Mean Reversion": "Observe failures in strong downtrends.",
-        "RSI Reversal": "Watch frequent signals.",
+        "Mean Reversion": "Fails in strong downtrends.",
+        "RSI Reversal": "Frequent signals.",
         "Volatility Breakout": "Few but strong trades.",
-        "Trend Pullback": "Better entries within trends.",
-        "Blended Strategy": "Smoother equity curve vs single strategies."
+        "Trend Pullback": "Better timing in trends.",
+        "Blended Strategy": "Smoother curve from diversification."
     }
 
     st.write(learnings[strategy])
 
-    # ================= METRICS =================
-    total_return = (df["Equity"].iloc[-1] - 1) * 100
-    max_dd = (df["Equity"] / df["Equity"].cummax() - 1).min() * 100
-    sharpe = df["Strat_Return"].mean()/df["Strat_Return"].std()*np.sqrt(252) if df["Strat_Return"].std()!=0 else 0
-    trades = (df["Position"].diff()==1).sum()
+    # ================= SAFE METRICS =================
+    st.subheader("📊 Strategy Metrics")
 
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("Return %", f"{total_return:.2f}")
-    c2.metric("Sharpe", f"{sharpe:.2f}")
-    c3.metric("MaxDD %", f"{max_dd:.2f}")
-    c4.metric("Trades", int(trades))
+    if df["Equity"].dropna().shape[0] > 0:
 
-    # ================= COMPARISON =================
+        total_return = (df["Equity"].iloc[-1] - 1) * 100
+        max_dd = (df["Equity"] / df["Equity"].cummax() - 1).min() * 100
+        sharpe = df["Strat_Return"].mean()/df["Strat_Return"].std()*np.sqrt(252) if df["Strat_Return"].std()!=0 else 0
+        trades = (df["Position"].diff()==1).sum()
+
+        c1,c2,c3,c4 = st.columns(4)
+        c1.metric("Return %", f"{total_return:.2f}")
+        c2.metric("Sharpe", f"{sharpe:.2f}")
+        c3.metric("MaxDD %", f"{max_dd:.2f}")
+        c4.metric("Trades", int(trades))
+
+    else:
+        st.warning("No trades generated for this strategy & parameters.")
+
+    # ================= COMPARISON TABLE =================
     st.subheader("📊 Multi-Strategy Comparison")
 
     results = []
 
     for name, pos in strategy_map.items():
+
         strat_ret = df["Return"] * pos.shift(1)
         equity = (1 + strat_ret.fillna(0)).cumprod()
+
+        if equity.dropna().shape[0] == 0:
+            results.append([name, 0, 0, 0, 0])
+            continue
+
         ret = (equity.iloc[-1] - 1) * 100
         dd = (equity/equity.cummax() - 1).min() * 100
         sharpe_val = strat_ret.mean()/strat_ret.std()*np.sqrt(252) if strat_ret.std()!=0 else 0
@@ -204,10 +215,11 @@ if uploaded_file:
     comp = pd.DataFrame(results, columns=["Strategy","Return %","Sharpe","MaxDD %","Trades"])
     st.dataframe(comp)
 
-    # ================= EQUITY CURVE =================
+    # ================= EQUITY COMPARISON =================
     st.subheader("📈 Equity Curve Comparison")
 
     fig2, ax2 = plt.subplots(figsize=(10,5))
+
     for name, pos in strategy_map.items():
         strat_ret = df["Return"] * pos.shift(1)
         equity = (1 + strat_ret.fillna(0)).cumprod()
