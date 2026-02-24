@@ -121,6 +121,179 @@ if uploaded_file:
     df["Strat_Return"] = df["Return"] * df["Position"].shift(1)
     df["Equity"] = (1 + df["Strat_Return"].fillna(0)).cumprod()
 
+    # ================= LEARNING PANELS =================
+
+    st.subheader("📖 Strategy Explanation")
+    
+    explanations = {
+    
+    "Buy & Hold": """
+    **Core idea:** Always stay invested.
+    
+    **When it works**
+    • Long-term bull markets  
+    • Strong economic growth  
+    • Index investing  
+    
+    **When it fails**
+    • Deep crashes  
+    • Long sideways markets  
+    
+    **What to notice on chart**
+    • Big drawdowns  
+    • Strong long-term compounding  
+    """,
+    
+    "Momentum": """
+    **Core idea:** Buy strength (price above moving average).
+    
+    **When it works**
+    • Strong trends  
+    • Breakout markets  
+    • Bull phases  
+    
+    **When it fails**
+    • Sideways markets  
+    • Choppy periods  
+    • Frequent reversals  
+    
+    **What to notice**
+    • Many small losses  
+    • Few big winners  
+    • Whipsaws near MA  
+    """,
+    
+    "Dual MA": """
+    **Core idea:** Confirm trend using two moving averages.
+    
+    **When it works**
+    • Sustained bull markets  
+    • Long macro trends  
+    • Index trends  
+    
+    **When it fails**
+    • Late entry  
+    • Misses early rally  
+    • Choppy markets  
+    
+    **What to notice**
+    • Fewer trades  
+    • Smoother curve  
+    • Late entries  
+    """,
+    
+    "Mean Reversion": """
+    **Core idea:** Buy sharp dips expecting bounce.
+    
+    **When it works**
+    • Range markets  
+    • Low volatility  
+    • Mean-reverting stocks  
+    
+    **When it fails**
+    • Crashes  
+    • Structural declines  
+    • Strong trends  
+    
+    **What to notice**
+    • Many quick trades  
+    • Works until crash  
+    • Big losses in trends  
+    """,
+    
+    "RSI": """
+    **Core idea:** Buy when market oversold.
+    
+    **When it works**
+    • Short-term volatility  
+    • Range markets  
+    • Quick reversals  
+    
+    **When it fails**
+    • Strong downtrends  
+    • Bear markets  
+    • Trending crashes  
+    
+    **What to notice**
+    • Many signals  
+    • False bottoms  
+    • Overtrading  
+    """,
+    
+    "Breakout": """
+    **Core idea:** Buy new highs.
+    
+    **When it works**
+    • Strong momentum  
+    • News-driven rallies  
+    • Trending stocks  
+    
+    **When it fails**
+    • Fake breakouts  
+    • Range markets  
+    • Low volume  
+    
+    **What to notice**
+    • Few trades  
+    • Big winners  
+    • Missed early move  
+    """,
+    
+    "Trend Pullback": """
+    **Core idea:** Buy dips within trend.
+    
+    **When it works**
+    • Strong uptrends  
+    • Healthy corrections  
+    • Institutional buying  
+    
+    **When it fails**
+    • Trend reversals  
+    • Bear markets  
+    • Fake pullbacks  
+    
+    **What to notice**
+    • Better entries  
+    • Lower drawdown  
+    • Missed early breakout  
+    """,
+    
+    "Blended": """
+    **Core idea:** Combine multiple strategies.
+    
+    **When it works**
+    • Mixed market regimes  
+    • Diversification  
+    • Long-term allocation  
+    
+    **When it fails**
+    • Extreme trending markets  
+    • Over-diversification  
+    
+    **What to notice**
+    • Smoother equity  
+    • Lower drawdown  
+    • Moderate return  
+    """
+    }
+    
+    st.info(explanations[strategy])
+    
+    st.subheader("🎓 Classroom Learning Prompts")
+    
+    prompts = {
+    "Buy & Hold": "Would an investor tolerate this drawdown?",
+    "Momentum": "Why so many small losses?",
+    "Dual MA": "Why is entry late?",
+    "Mean Reversion": "Why does this crash fail?",
+    "RSI": "Is oversold always a buy?",
+    "Breakout": "Why so few trades?",
+    "Trend Pullback": "Why better risk-reward?",
+    "Blended": "Why smoother equity curve?"
+    }
+    
+    st.write(prompts[strategy])
+
     # ================= CHART =================
     st.subheader("Chart")
 
