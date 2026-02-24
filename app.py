@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Trading Strategy Learning Lab", layout="wide")
 st.title("📚 Trading Strategy Learning Lab")
-
-st.write("Upload Nifty historical data and explore how strategies behave.")
+st.write("Upload Nifty historical CSV and explore how strategies behave.")
 
 uploaded_file = st.file_uploader("Upload Nifty CSV", type=["csv"])
 
 if uploaded_file:
 
+    # ================= DATA LOAD =================
     df = pd.read_csv(uploaded_file)
     df.columns = [c.strip() for c in df.columns]
 
@@ -21,6 +21,7 @@ if uploaded_file:
     df[date_col] = pd.to_datetime(df[date_col], dayfirst=True, errors="coerce")
     df[price_col] = df[price_col].astype(str).str.replace(",", "")
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
+
     df = df.dropna().sort_values(date_col).reset_index(drop=True)
 
     # ================= SIDEBAR =================
@@ -93,77 +94,110 @@ if uploaded_file:
         "Trend Pullback": trend_pullback(),
     }
 
+    # ================= SELECT STRATEGY =================
     position = strategy_map[strategy]
     df["Position"] = position
-
     df["Strat_Return"] = df["Return"] * df["Position"].shift(1)
     df["Equity"] = (1 + df["Strat_Return"].fillna(0)).cumprod()
 
     # ================= EXPLANATION PANEL =================
     st.subheader("📖 Strategy Explanation")
 
-    explanations = {
-        "Buy & Hold": "Always invested. Benchmark strategy. Shows power of compounding.",
-        "Momentum (Single MA)": "Buy when price above MA. Fast but noisy.",
+    explanation_text = {
+        "Buy & Hold": "Always invested. Demonstrates long-term compounding and drawdowns.",
+        "Momentum (Single MA)": "Buy when price above MA. Fast signals, more noise.",
         "Dual MA Crossover": "Buy when short MA crosses long MA. Slower but smoother.",
-        "Mean Reversion": "Buy sharp dips expecting bounce. Fails in crashes.",
-        "RSI Reversal": "Buy oversold RSI. Many false signals.",
-        "Volatility Breakout": "Buy new highs. Captures strong moves.",
-        "Trend Pullback": "Buy pullbacks in uptrend. Combines trend + timing."
+        "Mean Reversion": "Buy deep dips below average. Works in range, fails in crashes.",
+        "RSI Reversal": "Buy when RSI oversold. Many short-term signals.",
+        "Volatility Breakout": "Buy new highs. Captures strong momentum moves.",
+        "Trend Pullback": "Buy pullbacks in established uptrend."
     }
 
-    st.info(explanations[strategy])
+    st.info(explanation_text[strategy])
 
-    # ================= CHART =================
-    entries = df[(df["Position"]==1)&(df["Position"].shift(1)==0)]
-    exits = df[(df["Position"]==0)&(df["Position"].shift(1)==1)]
+    # ================= STRATEGY-SPECIFIC CHART =================
+    entries = df[(df["Position"] == 1) & (df["Position"].shift(1) == 0)]
+    exits = df[(df["Position"] == 0) & (df["Position"].shift(1) == 1)]
 
-    fig, ax = plt.subplots(figsize=(10,5))
-    ax.plot(df[date_col], df[price_col], label="Price")
-    ax.plot(df[date_col], df["MA_S"], label="Short MA")
+    if strategy == "RSI Reversal":
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10,7), sharex=True)
 
-    if strategy in ["Dual MA Crossover","Trend Pullback"]:
-        ax.plot(df[date_col], df["MA_L"], label="Long MA")
+        ax1.plot(df[date_col], df[price_col], label="Price")
+        ax1.scatter(entries[date_col], entries[price_col], marker="^")
+        ax1.scatter(exits[date_col], exits[price_col], marker="v")
+        ax1.legend()
 
-    ax.scatter(entries[date_col], entries[price_col], marker="^", label="Entry")
-    ax.scatter(exits[date_col], exits[price_col], marker="v", label="Exit")
+        ax2.plot(df[date_col], df["RSI"], label="RSI")
+        ax2.axhline(rsi_level, linestyle="--")
+        ax2.axhline(70, linestyle="--")
+        ax2.legend()
 
-    ax.legend()
-    st.pyplot(fig)
+        st.pyplot(fig)
+
+    elif strategy == "Volatility Breakout":
+        fig, ax = plt.subplots(figsize=(10,5))
+        rolling_high = df[price_col].rolling(20).max()
+        ax.plot(df[date_col], df[price_col], label="Price")
+        ax.plot(df[date_col], rolling_high, linestyle="--", label="20-Day High")
+        ax.scatter(entries[date_col], entries[price_col], marker="^")
+        ax.scatter(exits[date_col], exits[price_col], marker="v")
+        ax.legend()
+        st.pyplot(fig)
+
+    else:
+        fig, ax = plt.subplots(figsize=(10,5))
+        ax.plot(df[date_col], df[price_col], label="Price")
+        ax.plot(df[date_col], df["MA_S"], label="Short MA")
+
+        if strategy in ["Dual MA Crossover", "Trend Pullback"]:
+            ax.plot(df[date_col], df["MA_L"], label="Long MA")
+
+        ax.scatter(entries[date_col], entries[price_col], marker="^")
+        ax.scatter(exits[date_col], exits[price_col], marker="v")
+        ax.legend()
+        st.pyplot(fig)
 
     # ================= WHAT TO OBSERVE =================
     st.subheader("🎓 What Students Should Observe")
 
     learnings = {
-        "Buy & Hold": "Notice long-term growth and drawdowns.",
-        "Momentum (Single MA)": "Many trades. Early entries. Whipsaws.",
-        "Dual MA Crossover": "Fewer trades. Late entry.",
-        "Mean Reversion": "Works in range, fails in crash.",
-        "RSI Reversal": "Frequent false signals.",
-        "Volatility Breakout": "Few but strong trades.",
-        "Trend Pullback": "Best risk-reward in trends."
+        "Buy & Hold": "Notice compounding and large drawdowns.",
+        "Momentum (Single MA)": "Frequent trades. Early but noisy entries.",
+        "Dual MA Crossover": "Fewer trades. Late entry but smoother trend.",
+        "Mean Reversion": "Works in sideways markets. Fails in strong trends.",
+        "RSI Reversal": "Many false signals in strong downtrends.",
+        "Volatility Breakout": "Few trades but strong sustained moves.",
+        "Trend Pullback": "Combines trend direction with better timing."
     }
 
     st.write(learnings[strategy])
 
     # ================= METRICS =================
     total_return = (df["Equity"].iloc[-1] - 1) * 100
-    st.metric("Strategy Return %", f"{total_return:.2f}")
+    max_dd = (df["Equity"] / df["Equity"].cummax() - 1).min() * 100
+    sharpe = df["Strat_Return"].mean()/df["Strat_Return"].std()*np.sqrt(252) if df["Strat_Return"].std()!=0 else 0
+    trades = (df["Position"].diff()==1).sum()
 
-    # ================= COMPARISON =================
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Return %", f"{total_return:.2f}")
+    col2.metric("Sharpe", f"{sharpe:.2f}")
+    col3.metric("MaxDD %", f"{max_dd:.2f}")
+    col4.metric("Trades", int(trades))
+
+    # ================= COMPARISON TABLE =================
     st.subheader("📊 Multi-Strategy Comparison")
 
     results = []
-    for name,pos in strategy_map.items():
+
+    for name, pos in strategy_map.items():
         strat_ret = df["Return"] * pos.shift(1)
         equity = (1 + strat_ret.fillna(0)).cumprod()
-
         ret = (equity.iloc[-1] - 1) * 100
         dd = (equity/equity.cummax() - 1).min() * 100
-        sharpe = strat_ret.mean()/strat_ret.std()*np.sqrt(252) if strat_ret.std()!=0 else 0
-        trades = (pos.diff()==1).sum()
+        sharpe_val = strat_ret.mean()/strat_ret.std()*np.sqrt(252) if strat_ret.std()!=0 else 0
+        trades_val = (pos.diff()==1).sum()
 
-        results.append([name, round(ret,2), round(sharpe,2), round(dd,2), int(trades)])
+        results.append([name, round(ret,2), round(sharpe_val,2), round(dd,2), int(trades_val)])
 
     comp = pd.DataFrame(results, columns=["Strategy","Return %","Sharpe","MaxDD %","Trades"])
     st.dataframe(comp)
@@ -172,7 +206,7 @@ if uploaded_file:
     st.subheader("📈 Equity Curve Comparison")
 
     fig2, ax2 = plt.subplots(figsize=(10,5))
-    for name,pos in strategy_map.items():
+    for name, pos in strategy_map.items():
         strat_ret = df["Return"] * pos.shift(1)
         equity = (1 + strat_ret.fillna(0)).cumprod()
         ax2.plot(df[date_col], equity, label=name)
