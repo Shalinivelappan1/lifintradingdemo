@@ -3,23 +3,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Trading Strategy Learning Lab", layout="wide")
-st.title("📚 Trading Strategy Learning Lab")
-st.write("Upload Nifty historical CSV and explore how strategies behave.")
+st.set_page_config(page_title="Strategy Learning Lab", layout="wide")
+st.title("📚 Strategy Learning Lab")
+st.write("Upload any stock/index CSV (Date + Close)")
 
-uploaded_file = st.file_uploader("Upload Nifty CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file:
 
-    # ================= DATA LOAD =================
+    # ================= DATA =================
     df = pd.read_csv(uploaded_file)
     df.columns = [c.strip() for c in df.columns]
 
-    date_col = [c for c in df.columns if "Date" in c or "date" in c][0]
-    price_col = [c for c in df.columns if "Close" in c or "Price" in c][-1]
+    date_col = [c for c in df.columns if "date" in c.lower()][0]
+    price_col = [c for c in df.columns if "close" in c.lower() or "price" in c.lower()][-1]
 
-    df[date_col] = pd.to_datetime(df[date_col], dayfirst=True, errors="coerce")
-    df[price_col] = df[price_col].astype(str).str.replace(",", "")
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
 
     df = df.dropna().sort_values(date_col).reset_index(drop=True)
@@ -36,7 +35,8 @@ if uploaded_file:
             "Mean Reversion",
             "RSI Reversal",
             "Volatility Breakout",
-            "Trend Pullback"
+            "Trend Pullback",
+            "Blended Strategy"
         ]
     )
 
@@ -84,6 +84,14 @@ if uploaded_file:
         pullback = df[price_col] < df["MA_S"]
         return pd.Series(np.where(uptrend & pullback, 1, 0), index=df.index)
 
+    def blended_strategy():
+        pos1 = momentum()
+        pos2 = dual_ma()
+        pos3 = mean_reversion()
+        pos4 = rsi_strategy()
+        pos5 = breakout()
+        return (pos1 + pos2 + pos3 + pos4 + pos5) / 5
+
     strategy_map = {
         "Buy & Hold": buy_hold(),
         "Momentum (Single MA)": momentum(),
@@ -92,82 +100,76 @@ if uploaded_file:
         "RSI Reversal": rsi_strategy(),
         "Volatility Breakout": breakout(),
         "Trend Pullback": trend_pullback(),
+        "Blended Strategy": blended_strategy(),
     }
 
-    # ================= SELECT STRATEGY =================
+    # ================= SELECTED STRATEGY =================
     position = strategy_map[strategy]
     df["Position"] = position
     df["Strat_Return"] = df["Return"] * df["Position"].shift(1)
     df["Equity"] = (1 + df["Strat_Return"].fillna(0)).cumprod()
 
-    # ================= EXPLANATION PANEL =================
+    # ================= EXPLANATION =================
     st.subheader("📖 Strategy Explanation")
 
     explanation_text = {
-        "Buy & Hold": "Always invested. Demonstrates long-term compounding and drawdowns.",
-        "Momentum (Single MA)": "Buy when price above MA. Fast signals, more noise.",
-        "Dual MA Crossover": "Buy when short MA crosses long MA. Slower but smoother.",
-        "Mean Reversion": "Buy deep dips below average. Works in range, fails in crashes.",
-        "RSI Reversal": "Buy when RSI oversold. Many short-term signals.",
-        "Volatility Breakout": "Buy new highs. Captures strong momentum moves.",
-        "Trend Pullback": "Buy pullbacks in established uptrend."
+        "Buy & Hold": "Always invested. Shows compounding and drawdowns.",
+        "Momentum (Single MA)": "Buy when price above MA. Fast but noisy.",
+        "Dual MA Crossover": "Buy when short MA crosses long MA.",
+        "Mean Reversion": "Buy deep dips. Fails in strong trends.",
+        "RSI Reversal": "Buy oversold RSI. Many signals.",
+        "Volatility Breakout": "Buy new highs.",
+        "Trend Pullback": "Buy pullbacks in uptrend.",
+        "Blended Strategy": "Equal-weight mix of strategies across full period."
     }
 
     st.info(explanation_text[strategy])
 
-    # ================= STRATEGY-SPECIFIC CHART =================
+    # ================= CHART =================
     entries = df[(df["Position"] == 1) & (df["Position"].shift(1) == 0)]
     exits = df[(df["Position"] == 0) & (df["Position"].shift(1) == 1)]
 
     if strategy == "RSI Reversal":
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10,7), sharex=True)
-
-        ax1.plot(df[date_col], df[price_col], label="Price")
+        ax1.plot(df[date_col], df[price_col])
         ax1.scatter(entries[date_col], entries[price_col], marker="^")
         ax1.scatter(exits[date_col], exits[price_col], marker="v")
-        ax1.legend()
-
-        ax2.plot(df[date_col], df["RSI"], label="RSI")
+        ax2.plot(df[date_col], df["RSI"])
         ax2.axhline(rsi_level, linestyle="--")
         ax2.axhline(70, linestyle="--")
-        ax2.legend()
-
         st.pyplot(fig)
 
     elif strategy == "Volatility Breakout":
         fig, ax = plt.subplots(figsize=(10,5))
-        rolling_high = df[price_col].rolling(20).max()
-        ax.plot(df[date_col], df[price_col], label="Price")
-        ax.plot(df[date_col], rolling_high, linestyle="--", label="20-Day High")
+        band = df[price_col].rolling(20).max()
+        ax.plot(df[date_col], df[price_col])
+        ax.plot(df[date_col], band, linestyle="--")
         ax.scatter(entries[date_col], entries[price_col], marker="^")
         ax.scatter(exits[date_col], exits[price_col], marker="v")
-        ax.legend()
         st.pyplot(fig)
 
     else:
         fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(df[date_col], df[price_col], label="Price")
-        ax.plot(df[date_col], df["MA_S"], label="Short MA")
-
+        ax.plot(df[date_col], df[price_col])
+        ax.plot(df[date_col], df["MA_S"])
         if strategy in ["Dual MA Crossover", "Trend Pullback"]:
-            ax.plot(df[date_col], df["MA_L"], label="Long MA")
-
+            ax.plot(df[date_col], df["MA_L"])
         ax.scatter(entries[date_col], entries[price_col], marker="^")
         ax.scatter(exits[date_col], exits[price_col], marker="v")
-        ax.legend()
         st.pyplot(fig)
 
     # ================= WHAT TO OBSERVE =================
-    st.subheader("🎓 What Students Should Observe")
+    st.subheader("🎓 What to Observe")
 
     learnings = {
-        "Buy & Hold": "Notice compounding and large drawdowns.",
-        "Momentum (Single MA)": "Frequent trades. Early but noisy entries.",
-        "Dual MA Crossover": "Fewer trades. Late entry but smoother trend.",
-        "Mean Reversion": "Works in sideways markets. Fails in strong trends.",
-        "RSI Reversal": "Many false signals in strong downtrends.",
-        "Volatility Breakout": "Few trades but strong sustained moves.",
-        "Trend Pullback": "Combines trend direction with better timing."
+        "Buy & Hold": "Observe long-term growth and drawdowns.",
+        "Momentum (Single MA)": "Notice whipsaws in sideways markets.",
+        "Dual MA Crossover": "Notice delayed entries.",
+        "Mean Reversion": "Observe failures in strong downtrends.",
+        "RSI Reversal": "Watch frequent signals.",
+        "Volatility Breakout": "Few but strong trades.",
+        "Trend Pullback": "Better entries within trends.",
+        "Blended Strategy": "Smoother equity curve vs single strategies."
     }
 
     st.write(learnings[strategy])
@@ -178,13 +180,13 @@ if uploaded_file:
     sharpe = df["Strat_Return"].mean()/df["Strat_Return"].std()*np.sqrt(252) if df["Strat_Return"].std()!=0 else 0
     trades = (df["Position"].diff()==1).sum()
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Return %", f"{total_return:.2f}")
-    col2.metric("Sharpe", f"{sharpe:.2f}")
-    col3.metric("MaxDD %", f"{max_dd:.2f}")
-    col4.metric("Trades", int(trades))
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric("Return %", f"{total_return:.2f}")
+    c2.metric("Sharpe", f"{sharpe:.2f}")
+    c3.metric("MaxDD %", f"{max_dd:.2f}")
+    c4.metric("Trades", int(trades))
 
-    # ================= COMPARISON TABLE =================
+    # ================= COMPARISON =================
     st.subheader("📊 Multi-Strategy Comparison")
 
     results = []
@@ -215,4 +217,4 @@ if uploaded_file:
     st.pyplot(fig2)
 
 else:
-    st.info("Upload Nifty CSV to begin.")
+    st.info("Upload CSV to begin.")
